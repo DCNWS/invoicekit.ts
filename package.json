@@ -1,0 +1,54 @@
+{
+  "name": "@invoicekit/einvoice",
+  "version": "0.1.0",
+  "description": "EN 16931 e-invoice validation (CII and UBL) in the browser or Node — the same pure-Go engine as the Go library, compiled to WebAssembly.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./assets/*": "./assets/*"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "license": "MIT",
+  "keywords": [
+    "en16931",
+    "e-invoicing",
+    "factur-x",
+    "zugferd",
+    "xrechnung",
+    "peppol",
+    "ubl",
+    "cii",
+    "validation",
+    "wasm"
+  ],
+  "homepage": "https://github.com/DCNWS/invoicekit.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DCNWS/invoicekit.ts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DCNWS/invoicekit.ts/issues"
+  },
+  "author": "Winston Hale",
+  "scripts": {
+    "build:wasm": "./scripts/build-wasm.sh",
+    "build": "tsc -p .",
+    "pretest": "npm run build",
+    "test": "node --test test/",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}
