@@ -29,14 +29,14 @@ npm install @invoicekit/einvoice
 ```
 
 The WebAssembly binary and its Go runtime glue ship in `assets/`: 9.4 MB of
-wasm, 2.3 MB gzipped, and the 17 KB of Go glue it needs. **The package is not
+wasm, 2.4 MB gzipped, and the 17 KB of Go glue it needs. **The package is not
 on the registry yet**, so until it is, that install line resolves nowhere.
 What does work is the tarball attached to each
 [release](https://github.com/DCNWS/invoicekit.ts/releases): same contents, the
 same engine the tests just ran against, installed by URL.
 
 ```sh
-npm install https://github.com/DCNWS/invoicekit.ts/releases/download/v0.2.1/invoicekit-einvoice-0.2.1.tgz
+npm install https://github.com/DCNWS/invoicekit.ts/releases/download/v0.2.2/invoicekit-einvoice-0.2.2.tgz
 ```
 
 To work on the package itself, build the binaries from the Go sources first —
@@ -187,16 +187,17 @@ never changes between cases. Severity split:
 
 ## Speed
 
-The engine is native Go compiled to WebAssembly, and the port is slower than
-the library it comes from: about **31 ms per document** validating the official
-CEF corpus in Node 26 on one core of a Ryzen 9 5950X — around 32 documents a
-second, so a page validates the file someone dropped on it in a few tens of
-milliseconds. A browser is the same module with a different host; the first
-validation also pays for compiling the binary, which is why a long-lived page
-or worker is cheaper per document than a fresh one.
+The engine is Go compiled to WebAssembly, and the port is slower than native
+code: about **8.5 ms per UBL document** and **7.8 ms per CII document**
+validating the official CEF corpus in Node 26 on one core of a Ryzen 9 5950X —
+a bit over 100 documents a second, so a page answers the file someone dropped
+on it before the drop animation finishes. A browser is the same module with a
+different host; the first validation also pays for compiling the binary, which
+is why a long-lived page or worker is cheaper per document than a fresh one.
 
-The native figures — 7.9 ms a document, 125 a second on one core — are measured
-in [the Go repository](https://github.com/DCNWS/invoicekit.go#speed), where the
+The native figures — 2.1 ms a UBL document, 1.8 ms a CII one, roughly 480 a
+second on one core — are measured in
+[the Go repository](https://github.com/DCNWS/invoicekit.go#speed), where the
 benchmark lives.
 
 ## What it does not check

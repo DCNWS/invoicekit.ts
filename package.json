@@ -1,6 +1,6 @@
 {
   "name": "@invoicekit/einvoice",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "EN 16931 e-invoice validation (CII and UBL) in the browser or Node \u2014 the same pure-Go engine as the Go library, compiled to WebAssembly.",
   "type": "module",
   "main": "./dist/index.js",
