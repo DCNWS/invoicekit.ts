@@ -20,11 +20,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: DCNWS/invoicekit.go
-          path: ../invoicekit.go
+          path: engine
       - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
-      - run: ./scripts/build-wasm.sh
+      - run: ./scripts/build-wasm.sh engine
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

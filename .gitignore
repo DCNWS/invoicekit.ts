@@ -4,3 +4,6 @@
 node_modules/
 *.tsbuildinfo
 .DS_Store
+
+# the Go engine checkout used by CI when building assets
+/engine/

@@ -1,42 +1,30 @@
 name: engine
+# The wasm binary is built from another repository, so this package can be green
+# against a binary it shipped months ago and broken against the engine today.
+# Weekly, build the current engine tip and run the suite against it. A red run
+# here means the two repositories have drifted, not that a commit broke a build.
 on:
   schedule:
-    - cron: '17 3 * * 1'      # Mondays: rebuild assets from the Go engine tip
+    - cron: '17 3 * * 1'      # Mondays
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
-  rebuild:
+  against-engine-tip:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
           repository: DCNWS/invoicekit.go
-          path: ../invoicekit.go
+          path: engine
       - uses: actions/setup-go@v5
         with:
           go-version: 'stable'
-      - run: ./scripts/build-wasm.sh
+      - run: ./scripts/build-wasm.sh engine
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install && npm test
-      - name: open a pull request if the engine moved
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -eu
-          if git diff --quiet -- assets; then echo "assets unchanged"; exit 0; fi
-          branch="engine-rebuild-$(date -u +%Y%m%d%H%M)"
-          git checkout -b "$branch"
-          git config user.name "engine-rebuild"
-          git config user.email "engine-rebuild@users.noreply.github.com"
-          git add -f assets
-          git commit -m "Rebuild assets from the Go engine tip"
-          git push -u origin "$branch"
-          gh pr create --title "Rebuild assets from the Go engine tip" \
-            --body "Scheduled rebuild of the wasm assets from DCNWS/invoicekit.go. Tests passed against the new binary." --fill
+      - run: npm ci
+      - run: npm test
+      - name: what the shipped package would weigh
+        run: printf 'wasm %s bytes\n' "$(stat -c %s assets/einv.wasm)"
