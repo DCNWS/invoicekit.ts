@@ -36,6 +36,20 @@ jobs:
           npm run build
           tarball=$(npm pack --pack-destination pack)
           echo "TARBALL=pack/$tarball" >> "$GITHUB_ENV"
+      - name: the tarball carries the licences it must
+        # The wasm embeds other people's copyright — the EU's EN 16931
+        # Schematrons under EUPL-1.2, KoSIT's and OpenPEPPOL's rules under
+        # Apache-2.0 — so a tarball that ships the binary without the notices
+        # is a licence breach, not a packaging detail.
+        run: |
+          set -eu
+          contents=$(tar -tzf "$TARBALL")
+          for required in NOTICE.md LICENSE LICENSES/EUPL-1.2.txt LICENSES/Apache-2.0.txt; do
+            echo "$contents" | grep -q "package/$required" || {
+              echo "$required is missing from $TARBALL" >&2
+              exit 1
+            }
+          done
       - name: the packed tarball installs and boots
         run: |
           set -eu

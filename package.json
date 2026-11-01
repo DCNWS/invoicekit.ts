@@ -15,7 +15,9 @@
   "files": [
     "dist",
     "assets",
-    "README.md"
+    "README.md",
+    "NOTICE.md",
+    "LICENSES"
   ],
   "sideEffects": false,
   "license": "MIT",
