@@ -12,18 +12,18 @@ jobs:
   against-engine-tip:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: DCNWS/invoicekit.go
           path: engine
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
-          go-version: 'stable'
+          go-version-file: engine/go.mod
       - run: ./scripts/build-wasm.sh engine
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: 'lts/*'
       - run: npm ci
       - run: npm test
       - name: what the shipped package would weigh

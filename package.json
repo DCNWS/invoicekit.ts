@@ -1,7 +1,7 @@
 {
   "name": "@invoicekit/einvoice",
   "version": "0.1.0",
-  "description": "EN 16931 e-invoice validation (CII and UBL) in the browser or Node — the same pure-Go engine as the Go library, compiled to WebAssembly.",
+  "description": "EN 16931 e-invoice validation (CII and UBL) in the browser or Node \u2014 the same pure-Go engine as the Go library, compiled to WebAssembly.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -48,7 +48,10 @@
     "typecheck": "tsc -p . --noEmit"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
-    "@types/node": "^22.0.0"
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }
