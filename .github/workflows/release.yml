@@ -4,9 +4,18 @@ name: release
 # from the Go engine at the release the package version names — the same rule
 # publish.yml follows — so what is attached is exactly what the suite just
 # validated, and not whatever the engine's default branch happened to be.
+#
+# It also runs on demand, because a tag pushed by another workflow starts
+# nothing: engine-release.yml dispatches it at the tag it has just cut.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'the tag to release, e.g. v0.2.5 (default: the ref this ran from)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -24,6 +33,22 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: engine/go.mod
+      - name: which tag is this release for?
+        id: tag
+        env:
+          WANT: ${{ inputs.tag }}
+        run: |
+          set -eu
+          tag=$WANT
+          [ -n "$tag" ] || tag=$GITHUB_REF_NAME
+          ver=$(node -p "require('./package.json').version")
+          # The tag names the commit and the version; a run that cannot agree on
+          # both would attach a tarball to the wrong release, so it stops here.
+          if [ "v$ver" != "$tag" ]; then
+            echo "release $tag does not match package.json version $ver" >&2
+            exit 1
+          fi
+          echo "name=$tag" >>"$GITHUB_OUTPUT"
       - name: build the engine release this package version names
         run: |
           set -eu
@@ -81,8 +106,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
+          tag=${{ steps.tag.outputs.name }}
           notes=$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
-            -f tag_name="$GITHUB_REF_NAME" --jq .body 2>/dev/null || true)
-          gh release create "$GITHUB_REF_NAME" "$TARBALL" \
-            --title "$GITHUB_REF_NAME" \
-            --notes "${notes:-The engine this package is named after, built and tested in CI.}"
+            -f tag_name="$tag" --jq .body 2>/dev/null || true)
+          # A tag that moves — a rewritten history, a re-dispatch — must not turn
+          # into a red run, and must not leave the old tarball attached either.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$TARBALL" --clobber
+          else
+            gh release create "$tag" "$TARBALL" \
+              --title "$tag" \
+              --notes "${notes:-The engine this package is named after, built and tested in CI.}"
+          fi

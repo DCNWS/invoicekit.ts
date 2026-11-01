@@ -2,12 +2,20 @@ name: publish
 # Publishing is a tag: the tag says which commit became the package, and the
 # version inside package.json has to agree with it. The assets are built here
 # rather than committed, so the published wasm is never a stale binary: the
-# Go repository is checked out at the release the package version names, and
-# the tests below run against the bytes that go into the tarball.
+# Go repository is checked out at the release the package version names, and the
+# tests below run against the bytes that go into the tarball.
+#
+# It also runs on demand, because a tag pushed by another workflow starts
+# nothing: engine-release.yml dispatches it at the tag it has just cut.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'the tag being published, e.g. v0.2.5 (default: the ref this ran from)'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -46,21 +54,23 @@ jobs:
           set -eu
           ver=$(node -p "require('./package.json').version")
           # A tag push says which commit became the package, so the tag and
-          # package.json have to agree. A manual run does not, so the version
-          # in package.json is the one that gets published.
+          # package.json have to agree. A manual run does not carry a tag, so it
+          # has to be named, and the version in package.json is otherwise the
+          # one that gets published.
+          tag=${WANT:-}
           case "$GITHUB_REF" in
-            refs/tags/*)
-              tag=${GITHUB_REF#refs/tags/}
-              if [ "v$ver" != "$tag" ]; then
-                echo "tag $tag does not match package.json version $ver" >&2
-                exit 1
-              fi
-              ;;
+            refs/tags/*) [ -n "$tag" ] || tag=${GITHUB_REF#refs/tags/} ;;
           esac
+          if [ -n "$tag" ] && [ "v$ver" != "$tag" ]; then
+            echo "tag $tag does not match package.json version $ver" >&2
+            exit 1
+          fi
           if npm view "@invoicekit/einvoice@$ver" version >/dev/null 2>&1; then
             echo "@invoicekit/einvoice@$ver is already on the registry" >&2
             exit 1
           fi
+        env:
+          WANT: ${{ inputs.tag }}
       # The registry token is not configured yet, so a tag builds, tests and
       # verifies the tarball and stops short of publishing. The conditional
       # keeps a repository without the secret — a fork, or a misconfigured

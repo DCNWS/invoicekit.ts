@@ -1,0 +1,129 @@
+name: engine-release
+# The engine lives in another repository, so every release of it leaves this
+# package one version behind until someone notices. This workflow notices:
+# hourly, it asks the engine repository for its newest published release and,
+# if that is newer than the version here, builds and tests this package against
+# it and cuts the matching release. Nothing to do locally except merge.
+#
+# Two rules keep it honest:
+#   - the tests run against the engine the new version names, before anything is
+#     written. A red scheduled run publishes nothing.
+#   - the commit, the tag and the two release workflows all name the same
+#     version, so publish.yml and release.yml still describe what they build.
+#
+# Pushes made with the workflow's own token do not start other workflows, which
+# is why the two releases are dispatched explicitly at the tag instead of
+# waiting for the tag push to do it.
+on:
+  schedule:
+    - cron: '23 * * * *'        # every hour; a no-op run is a few seconds
+  workflow_dispatch:
+    inputs:
+      engine_tag:
+        description: 'engine release to adopt, e.g. v0.3.0 (default: newest published)'
+        required: false
+        type: string
+
+permissions:
+  contents: write        # the version bump commit and the tag
+  actions: write         # dispatching publish.yml and release.yml
+
+jobs:
+  adopt:
+    runs-on: ubuntu-latest
+    concurrency: adopt-engine-release
+    steps:
+      - name: the newest published engine release
+        id: engine
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WANT: ${{ inputs.engine_tag }}
+        run: |
+          set -eu
+          tag=$WANT
+          [ -n "$tag" ] || tag=$(gh api repos/DCNWS/invoicekit.go/releases/latest --jq .tag_name)
+          case "$tag" in
+            v[0-9]*) ;;
+            *) echo "engine tag $tag is not a version" >&2; exit 1 ;;
+          esac
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+
+      - name: does this package already ship that engine?
+        id: bump
+        run: |
+          set -eu
+          want=${{ steps.engine.outputs.tag }}
+          have="v$(node -p "require('./package.json').version")"
+          if [ "$want" = "$have" ]; then
+            echo "package already at $have; nothing to do" >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # sort -V rather than a string compare: v0.2.10 is newer than v0.2.9.
+          newest=$(printf '%s\n%s\n' "$want" "$have" | sort -V | tail -n1)
+          if [ "$newest" != "$want" ]; then
+            echo "package $have is ahead of the newest engine release $want; nothing to do" >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "needed=true" >>"$GITHUB_OUTPUT"
+          echo "version=${want#v}" >>"$GITHUB_OUTPUT"
+          echo "adopting $want in this package" >>"$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v7
+        if: steps.bump.outputs.needed == 'true'
+        with:
+          repository: DCNWS/invoicekit.go
+          ref: ${{ steps.engine.outputs.tag }}
+          path: engine
+      - uses: actions/setup-go@v7
+        if: steps.bump.outputs.needed == 'true'
+        with:
+          go-version-file: engine/go.mod
+      - name: build the wasm this version would ship
+        if: steps.bump.outputs.needed == 'true'
+        run: ./scripts/build-wasm.sh engine
+      - uses: actions/setup-node@v7
+        if: steps.bump.outputs.needed == 'true'
+        with:
+          node-version: 'lts/*'
+      - run: npm ci
+        if: steps.bump.outputs.needed == 'true'
+      - run: npm run typecheck
+        if: steps.bump.outputs.needed == 'true'
+      - run: npm test
+        if: steps.bump.outputs.needed == 'true'
+
+      - name: write the version down and tag it
+        if: steps.bump.outputs.needed == 'true'
+        run: |
+          set -eu
+          ver=${{ steps.bump.outputs.version }}
+          # Releases come from main and nowhere else: a dispatch against a branch
+          # must not end up moving main.
+          if [ "$GITHUB_REF_NAME" != main ]; then
+            echo "run this from main, not $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          npm version --no-git-tag-version "$ver"
+          # Attribution follows whoever switched the automation on, not a bot
+          # nobody can reach when a release goes wrong.
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -qm "chore(release): take engine v$ver and bump the package to match"
+          git tag "v$ver"
+          git push origin HEAD:main "v$ver"
+
+      - name: build, test and attach the release
+        if: steps.bump.outputs.needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          ver=${{ steps.bump.outputs.version }}
+          # Pushes made by this token do not trigger workflows, so both release
+          # runs are started by hand, against the tag that was just pushed.
+          gh workflow run publish.yml --ref "v$ver" -f tag="v$ver"
+          gh workflow run release.yml --ref "v$ver" -f tag="v$ver"
+          echo "dispatched publish.yml and release.yml at v$ver" >>"$GITHUB_STEP_SUMMARY"
