@@ -1,8 +1,9 @@
 name: publish
 # Publishing is a tag: the tag says which commit became the package, and the
 # version inside package.json has to agree with it. The assets are built here
-# rather than committed, so a published tarball is always the engine the tests
-# just ran against, from the Go repository at its current tip.
+# rather than committed, so the published wasm is never a stale binary: the
+# Go repository is checked out at the release the package version names, and
+# the tests below run against the bytes that go into the tarball.
 on:
   push:
     tags: ['v*']
@@ -21,9 +22,17 @@ jobs:
         with:
           repository: DCNWS/invoicekit.go
           path: engine
+          fetch-depth: 0        # the tag for this package version has to be present
       - uses: actions/setup-go@v7
         with:
           go-version-file: engine/go.mod
+      - name: build the engine release this package version names
+        run: |
+          set -eu
+          ver=$(node -p "require('./package.json').version")
+          git -C engine fetch --tags --force
+          git -C engine checkout --detach "v$ver"
+          printf 'engine %s at %s\n' "$(git -C engine describe --tags)" "$(git -C engine rev-parse --short HEAD)"
       - run: ./scripts/build-wasm.sh engine
       - uses: actions/setup-node@v7
         with:
@@ -35,20 +44,28 @@ jobs:
       - name: the tag and package.json must say the same version
         run: |
           set -eu
-          tag=${GITHUB_REF_NAME:-}
           ver=$(node -p "require('./package.json').version")
-          if [ -n "$GITHUB_REF_NAME" ] && [ "v$ver" != "$tag" ]; then
-            echo "tag $tag does not match package.json version $ver" >&2
-            exit 1
-          fi
+          # A tag push says which commit became the package, so the tag and
+          # package.json have to agree. A manual run does not, so the version
+          # in package.json is the one that gets published.
+          case "$GITHUB_REF" in
+            refs/tags/*)
+              tag=${GITHUB_REF#refs/tags/}
+              if [ "v$ver" != "$tag" ]; then
+                echo "tag $tag does not match package.json version $ver" >&2
+                exit 1
+              fi
+              ;;
+          esac
           if npm view "@invoicekit/einvoice@$ver" version >/dev/null 2>&1; then
             echo "@invoicekit/einvoice@$ver is already on the registry" >&2
             exit 1
           fi
-      # The registry token is not configured yet, so the tag builds and tests
-      # the package and stops short of publishing: release.yml attaches the
-      # same tarball to the GitHub release, which is what people install until
-      # an npm account exists.
+      # The registry token is not configured yet, so a tag builds, tests and
+      # verifies the tarball and stops short of publishing. The conditional
+      # keeps a repository without the secret — a fork, or a misconfigured
+      # environment — green instead of red: release.yml attaches the same
+      # tarball to the GitHub release, which installs on its own.
       - name: is a registry token configured?
         id: registry
         env:
@@ -58,6 +75,6 @@ jobs:
         if: steps.registry.outputs.present == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.INVOICEKIT_NPM_TOKEN }}
-      - name: publish awaits a registry token
+      - name: no registry token here
         if: steps.registry.outputs.present != 'true'
-        run: echo "INVOICEKIT_NPM_TOKEN is not set, so the tarball stays on the GitHub release"
+        run: echo "INVOICEKIT_NPM_TOKEN is not set in this repository, so the tarball stays on the GitHub release"
