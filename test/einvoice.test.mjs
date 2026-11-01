@@ -17,8 +17,13 @@ const xmlIn = (dir) =>
 
 const einvoice = await loadEinvoice();
 
-test('version is reported', () => {
-  assert.equal(einvoice.version, '0.1.0');
+// The bundled engine and the package carry the same version by contract: the
+// tarball ships assets built from the engine release it is named after, so a
+// mismatch means a stale binary or a version bump that forgot to rebuild.
+test('the bundled engine reports the package version', () => {
+  const pkg = JSON.parse(readFileSync(path.join(here, '..', 'package.json'), 'utf8'));
+  assert.match(einvoice.version, /^\d+\.\d+\.\d+$/);
+  assert.equal(einvoice.version, pkg.version);
 });
 
 test('UBL reference documents are valid', () => {

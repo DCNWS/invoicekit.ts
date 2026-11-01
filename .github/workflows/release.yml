@@ -1,0 +1,65 @@
+name: release
+# Until the package is on the registry, a release is the only install that
+# works: npm takes a tarball over https. The tarball is built and tested here,
+# from the Go engine at its current tip, so what is attached is exactly what
+# the suite just validated — the same rule publish.yml follows.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  tarball:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: DCNWS/invoicekit.go
+          path: engine
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: engine/go.mod
+      - run: ./scripts/build-wasm.sh engine
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 'lts/*'
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: pack the package
+        run: |
+          set -eu
+          mkdir -p pack
+          npm run build
+          tarball=$(npm pack --pack-destination pack)
+          echo "TARBALL=pack/$tarball" >> "$GITHUB_ENV"
+      - name: the packed tarball installs and boots
+        run: |
+          set -eu
+          npm install --no-audit --no-fund --prefix /tmp/consumer "./$TARBALL"
+          node --input-type=module -e '
+          import { readFileSync } from "node:fs";
+          import { loadEinvoice } from "/tmp/consumer/node_modules/@invoicekit/einvoice/dist/index.js";
+          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          const einvoice = await loadEinvoice();
+          if (einvoice.version !== pkg.version) {
+            throw new Error(`tarball reports ${einvoice.version}, package.json says ${pkg.version}`);
+          }
+          if (einvoice.phases("CII").length === 0) {
+            throw new Error("the packed engine boots but knows no phases");
+          }
+          console.log(`packed engine boots and reports ${einvoice.version}`);
+          '
+      - name: attach the tarball to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          notes=$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$GITHUB_REF_NAME" --jq .body 2>/dev/null || true)
+          gh release create "$GITHUB_REF_NAME" "$TARBALL" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "${notes:-The engine this package is named after, built and tested in CI.}"

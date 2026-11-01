@@ -45,6 +45,19 @@ jobs:
             echo "@invoicekit/einvoice@$ver is already on the registry" >&2
             exit 1
           fi
+      # The registry token is not configured yet, so the tag builds and tests
+      # the package and stops short of publishing: release.yml attaches the
+      # same tarball to the GitHub release, which is what people install until
+      # an npm account exists.
+      - name: is a registry token configured?
+        id: registry
+        env:
+          TOKEN: ${{ secrets.INVOICEKIT_NPM_TOKEN }}
+        run: echo "present=$([ -n "$TOKEN" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - run: npm publish --provenance --access public
+        if: steps.registry.outputs.present == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.INVOICEKIT_NPM_TOKEN }}
+      - name: publish awaits a registry token
+        if: steps.registry.outputs.present != 'true'
+        run: echo "INVOICEKIT_NPM_TOKEN is not set, so the tarball stays on the GitHub release"

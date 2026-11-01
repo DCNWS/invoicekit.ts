@@ -30,9 +30,17 @@ npm install @invoicekit/einvoice
 
 The WebAssembly binary and its Go runtime glue ship in `assets/`: 9.4 MB of
 wasm, 2.3 MB gzipped, and the 17 KB of Go glue it needs. **The package is not
-on the registry yet**, so until it is, that install line resolves nowhere:
-clone the repository and build the binaries from the Go sources first — the
-tests need them, and they are not committed:
+on the registry yet**, so until it is, that install line resolves nowhere.
+What does work is the tarball attached to each
+[release](https://github.com/DCNWS/invoicekit.ts/releases): same contents, the
+same engine the tests just ran against, installed by URL.
+
+```sh
+npm install https://github.com/DCNWS/invoicekit.ts/releases/download/v0.2.1/invoicekit-einvoice-0.2.1.tgz
+```
+
+To work on the package itself, build the binaries from the Go sources first —
+they are not committed, and the tests need them:
 
 ```sh
 ./scripts/build-wasm.sh          # expects ../invoicekit.go, or pass its path
