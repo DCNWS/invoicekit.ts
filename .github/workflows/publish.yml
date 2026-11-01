@@ -1,0 +1,50 @@
+name: publish
+# Publishing is a tag: the tag says which commit became the package, and the
+# version inside package.json has to agree with it. The assets are built here
+# rather than committed, so a published tarball is always the engine the tests
+# just ran against, from the Go repository at its current tip.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write        # npm provenance: the registry records who built the tarball
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: DCNWS/invoicekit.go
+          path: ../invoicekit.go
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - run: ./scripts/build-wasm.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: the tag and package.json must say the same version
+        run: |
+          set -eu
+          tag=${GITHUB_REF_NAME:-}
+          ver=$(node -p "require('./package.json').version")
+          if [ -n "$GITHUB_REF_NAME" ] && [ "v$ver" != "$tag" ]; then
+            echo "tag $tag does not match package.json version $ver" >&2
+            exit 1
+          fi
+          if npm view "@invoicekit/einvoice@$ver" version >/dev/null 2>&1; then
+            echo "@invoicekit/einvoice@$ver is already on the registry" >&2
+            exit 1
+          fi
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.INVOICEKIT_NPM_TOKEN }}
