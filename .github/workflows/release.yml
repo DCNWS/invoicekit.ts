@@ -1,8 +1,9 @@
 name: release
 # Until the package is on the registry, a release is the only install that
 # works: npm takes a tarball over https. The tarball is built and tested here,
-# from the Go engine at its current tip, so what is attached is exactly what
-# the suite just validated — the same rule publish.yml follows.
+# from the Go engine at the release the package version names — the same rule
+# publish.yml follows — so what is attached is exactly what the suite just
+# validated, and not whatever the engine's default branch happened to be.
 on:
   push:
     tags: ['v*']
@@ -19,9 +20,17 @@ jobs:
         with:
           repository: DCNWS/invoicekit.go
           path: engine
+          fetch-depth: 0        # the tag for this package version has to be present
       - uses: actions/setup-go@v7
         with:
           go-version-file: engine/go.mod
+      - name: build the engine release this package version names
+        run: |
+          set -eu
+          ver=$(node -p "require('./package.json').version")
+          git -C engine fetch --tags --force
+          git -C engine checkout --detach "v$ver"
+          printf 'engine %s at %s\n' "$(git -C engine describe --tags)" "$(git -C engine rev-parse --short HEAD)"
       - run: ./scripts/build-wasm.sh engine
       - uses: actions/setup-node@v7
         with:
