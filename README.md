@@ -16,6 +16,12 @@ catches elements that are out of order, repeated or unknown. Profiles layer the
 rules a network or country adds — Peppol BIS Billing 3.0 and XRechnung are in
 this build.
 
+This is the engine that runs at
+[invoicekit.dcnws.com](https://invoicekit.dcnws.com): paste or drop an invoice
+and it answers in the browser, uploading nothing. The
+[full EN 16931 rule list](https://invoicekit.dcnws.com/en16931-rules.html) —
+1,569 rule ids, 1,792 assertions — is generated from the same release.
+
 ## Install
 
 ```sh
@@ -23,9 +29,10 @@ npm install @invoicekit/einvoice
 ```
 
 The WebAssembly binary and its Go runtime glue ship in `assets/`: 9.4 MB of
-wasm, 2.3 MB gzipped, and the 17 KB of Go glue it needs. The published npm
-tarball contains them pre-built. Cloning the repository instead, build them
-from the Go sources first — the tests need them, and they are not committed:
+wasm, 2.3 MB gzipped, and the 17 KB of Go glue it needs. **The package is not
+on the registry yet**, so until it is, that install line resolves nowhere:
+clone the repository and build the binaries from the Go sources first — the
+tests need them, and they are not committed:
 
 ```sh
 ./scripts/build-wasm.sh          # expects ../invoicekit.go, or pass its path
