@@ -6,8 +6,10 @@ name: engine-release
 # it and cuts the matching release. Nothing to do locally except merge.
 #
 # Two rules keep it honest:
-#   - the tests run against the engine the new version names, before anything is
-#     written. A red scheduled run publishes nothing.
+#   - the tests run against the engine the new version names. The version is
+#     written down locally first, because the package and the engine it bundles
+#     must state the same one; nothing is pushed until those tests are green, so
+#     a red scheduled run publishes nothing.
 #   - the commit, the tag and the two release workflows all name the same
 #     version, so publish.yml and release.yml still describe what they build.
 #
@@ -89,12 +91,7 @@ jobs:
           node-version: 'lts/*'
       - run: npm ci
         if: steps.bump.outputs.needed == 'true'
-      - run: npm run typecheck
-        if: steps.bump.outputs.needed == 'true'
-      - run: npm test
-        if: steps.bump.outputs.needed == 'true'
-
-      - name: write the version down and tag it
+      - name: write the version down before anything is tested
         if: steps.bump.outputs.needed == 'true'
         run: |
           set -eu
@@ -105,6 +102,11 @@ jobs:
             echo "run this from main, not $GITHUB_REF_NAME" >&2
             exit 1
           fi
+          # The version goes down first, because the first test in the suite
+          # asserts that the package and the engine it bundles state the same
+          # one. Testing a new engine against the old package.json would fail for
+          # a reason of this workflow's own ordering, and would hide a real
+          # failure behind a bookkeeping one.
           npm version --no-git-tag-version "$ver"
           # Attribution follows whoever switched the automation on, not a bot
           # nobody can reach when a release goes wrong.
@@ -113,6 +115,17 @@ jobs:
           git add package.json package-lock.json
           git commit -qm "chore(release): take engine v$ver and bump the package to match"
           git tag "v$ver"
+
+      - run: npm run typecheck
+        if: steps.bump.outputs.needed == 'true'
+      - run: npm test
+        if: steps.bump.outputs.needed == 'true'
+
+      - name: push the version the tests just agreed with
+        if: steps.bump.outputs.needed == 'true'
+        run: |
+          set -eu
+          ver=${{ steps.bump.outputs.version }}
           git push origin HEAD:main "v$ver"
 
       - name: build, test and attach the release
