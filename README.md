@@ -188,10 +188,17 @@ never changes between cases. Severity split:
 ## Speed
 
 The engine is Go compiled to WebAssembly, and the port is slower than native
-code: about **8.3 ms per UBL document** and **8.3 ms per CII document**
+code: about **9.0 ms per UBL document** and **7.0 ms per CII document**
 validating the official CEF corpus in Node 26 on one core of a Ryzen 9 5950X —
-around a hundred and twenty documents a second, so a page answers the file
-someone dropped on it before the drop animation finishes. A browser is the same
+112 and 142 documents a second respectively, so a page answers the file someone
+dropped on it before the drop animation finishes. The browser is the same module
+in a different host and lands in the same region: 7.9 ms per document, about 130
+a second, measured in Chrome against the published build of this site over the
+same corpus. `scripts/bench-wasm.mjs` reproduces the Node figures in a second;
+they are the engine release this package is named after, not the best numbers
+this code has ever produced. The first validation in a fresh page also pays for
+compiling the binary, which is why a long-lived page or worker is cheaper per
+document. A browser is the same
 module with a different host; the first validation also pays for compiling the
 binary, which
 is why a long-lived page or worker is cheaper per document than a fresh one.
