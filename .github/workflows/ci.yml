@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:       # re-run the gate against the ref it is dispatched from
 
 jobs:
   node:
@@ -14,9 +15,21 @@ jobs:
         node: ['24', 'latest']
     steps:
       - uses: actions/checkout@v7
+      - name: the engine release this package claims to bundle
+        id: engine
+        # the runner's own node is enough to read one field. The version is the
+        # engine tag: package.json and the bundled engine must state the same
+        # one, and the first test in the suite enforces that.
+        run: echo "tag=v$(node -p "require('./package.json').version")" >>"$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
         with:
           repository: DCNWS/invoicekit.go
+          # the pinned tag, not the engine's default branch: engine main is
+          # ahead of the last engine release between a merge and the release
+          # train's next run, and testing against it makes this gate red for a
+          # reason that is nobody's bug. If the tag does not exist the checkout
+          # says so and stops.
+          ref: ${{ steps.engine.outputs.tag }}
           path: engine
       - uses: actions/setup-go@v7
         with:
