@@ -28,7 +28,7 @@ and it answers in the browser, uploading nothing. The
 npm install @invoicekit/einvoice
 ```
 
-The WebAssembly binary and its Go runtime glue ship in `assets/`: 9.4 MB of
+The WebAssembly binary and its Go runtime glue ship in `assets/`: 9.5 MB of
 wasm, 2.4 MB gzipped, and the 17 KB of Go glue it needs. **The package is not
 on the registry yet**, so until it is, that install line resolves nowhere.
 What does work is the tarball attached to each
@@ -36,7 +36,7 @@ What does work is the tarball attached to each
 same engine the tests just ran against, installed by URL.
 
 ```sh
-npm install https://github.com/DCNWS/invoicekit.ts/releases/download/v0.2.2/invoicekit-einvoice-0.2.2.tgz
+npm install https://github.com/DCNWS/invoicekit.ts/releases/download/v0.2.5/invoicekit-einvoice-0.2.5.tgz
 ```
 
 To work on the package itself, build the binaries from the Go sources first —
@@ -188,14 +188,15 @@ never changes between cases. Severity split:
 ## Speed
 
 The engine is Go compiled to WebAssembly, and the port is slower than native
-code: about **9.0 ms per UBL document** and **8.3 ms per CII document**
+code: about **8.3 ms per UBL document** and **8.3 ms per CII document**
 validating the official CEF corpus in Node 26 on one core of a Ryzen 9 5950X —
-a hundred documents a second, so a page answers the file someone dropped on it
-before the drop animation finishes. A browser is the same module with a
-different host; the first validation also pays for compiling the binary, which
+around a hundred and twenty documents a second, so a page answers the file
+someone dropped on it before the drop animation finishes. A browser is the same
+module with a different host; the first validation also pays for compiling the
+binary, which
 is why a long-lived page or worker is cheaper per document than a fresh one.
 
-The native figures — 2.1 ms a UBL document, 1.7 ms a CII one, roughly 480 a
+The native figures — 1.9 ms a UBL document, 1.6 ms a CII one, roughly 520 a
 second on one core — are measured in
 [the Go repository](https://github.com/DCNWS/invoicekit.go#speed), where the
 benchmark lives.
