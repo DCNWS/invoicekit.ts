@@ -104,6 +104,17 @@ export class EinvoiceError extends Error {}
 /** PDF/A bytes, as a `File` read with `arrayBuffer()` or `fs.readFile`. */
 export type PdfBytes = Uint8Array | ArrayBuffer;
 
+/**
+ * An invoice document, as text or as the bytes it was read from.
+ *
+ * Bytes are accepted so that `fs.readFile(path)` without an encoding and
+ * `file.arrayBuffer()` in a browser work as well as a string does: both are
+ * ordinary ways to get an XML document, and passing the result straight in is
+ * what callers do. A byte-order mark is honoured, and a UTF-16 document is read
+ * as UTF-16, so the encoding of the file does not change the verdict.
+ */
+export type XmlSource = string | Uint8Array | ArrayBuffer;
+
 /** One envelope finding. These are PDF/A and Factur-X rules, not business
  *  rules: a finding here says what a conformance validator would do with the
  *  file, and `rule` is a stable id to react to instead of the message. */
@@ -228,14 +239,14 @@ export interface ConvertResult extends RenderResult {
 
 export interface Einvoice {
   readonly version: string;
-  validate(xml: string, opts?: Options): ValidationResult;
-  detect(xml: string): Syntax;
+  validate(xml: XmlSource, opts?: Options): ValidationResult;
+  detect(xml: XmlSource): Syntax;
   phases(syntax?: Syntax): string[];
   cius(): CiusProfile[];
   profiles(): ProfileInfo[];
   inspect(pdf: PdfBytes, opts?: Options): CheckResult;
   extract(pdf: PdfBytes): HybridPayload;
-  embedPDF(pdf: PdfBytes, xml: string, envelope?: EmbedOptions, opts?: Options): EmbedResult;
+  embedPDF(pdf: PdfBytes, xml: XmlSource, envelope?: EmbedOptions, opts?: Options): EmbedResult;
   /**
    * Read a document into the invoice model. Validate answers whether a document
    * obeys the rules; parse answers what it says — a document that breaks them
@@ -244,7 +255,7 @@ export interface Einvoice {
    * invoice document at all: not XML, a root that is not an invoice, or XML that
    * stops partway through.
    */
-  parse(xml: string): ParseResult;
+  parse(xml: XmlSource): ParseResult;
   /**
    * Render a model as CII or UBL and validate the document produced, so a model
    * that cannot satisfy the named rule set fails here rather than in a
@@ -257,7 +268,7 @@ export interface Einvoice {
    * from the one detected, and reports what the source document said that the
    * model could not carry — the loss is stated, not hidden.
    */
-  convert(xml: string, opts?: RenderOptions): ConvertResult;
+  convert(xml: XmlSource, opts?: RenderOptions): ConvertResult;
 }
 
 export interface LoadOptions {
@@ -298,6 +309,46 @@ function isErr(v: unknown): v is { error: string } {
 function unwrap<T>(v: T | { error: string }): T {
   if (isErr(v)) throw new EinvoiceError(v.error);
   return v as T;
+}
+
+/**
+ * Normalise an XML argument to text, and complain about the argument rather
+ * than the document when the argument is not a document at all.
+ *
+ * The engine speaks strings. Handing it a `Buffer` directly produced its
+ * complaint about a root element, which reads as a parsing failure and sends a
+ * caller looking at their XML when the mistake is in the call. TypeScript
+ * rejects that call at compile time; JavaScript callers deserve a sentence that
+ * names the mistake, so the conversion happens here and the type error is ours.
+ */
+function toXmlText(input: XmlSource, method: string): string {
+  if (typeof input === 'string') return input;
+  const bytes = input instanceof ArrayBuffer ? new Uint8Array(input) : input;
+  if (!(bytes instanceof Uint8Array)) {
+    const got = input === null ? 'null' : typeof input;
+    throw new TypeError(
+      `${method}() takes XML as a string or bytes, not ${got}. ` +
+      `readFileSync(path) without an encoding, or file.arrayBuffer(), gives bytes that work here.`);
+  }
+  // A BOM is the only encoding signal a byte string carries, so it decides the
+  // decoder. XML permits UTF-16 documents, and decoding one as UTF-8 would
+  // produce a nul-separated mess the parser would blame the document for.
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return new TextDecoder('utf-16be').decode(bytes.subarray(2));
+  }
+  try {
+    // fatal: a lone surrogate or an impossible sequence is a broken file, and
+    // TextDecoder would otherwise hand the parser a replacement character and
+    // let it guess.
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new EinvoiceError(
+      `${method}() was given bytes that are not UTF-8 XML text. ` +
+      `A UTF-16 document needs its byte-order mark, and a non-XML file (a PDF, a spreadsheet) has no business here.`);
+  }
 }
 
 function baseOf(o?: LoadOptions): string {
@@ -374,11 +425,11 @@ async function instantiate(base: string): Promise<Einvoice> {
   const raw = await awaitApi();
   return {
     version: raw.version,
-    validate(xml: string, o?: Options) {
-      return unwrap<ValidationResult>(raw.validate(xml, o));
+    validate(xml: XmlSource, o?: Options) {
+      return unwrap<ValidationResult>(raw.validate(toXmlText(xml, 'validate'), o));
     },
-    detect(xml: string) {
-      return unwrap<Syntax>(raw.detect(xml));
+    detect(xml: XmlSource) {
+      return unwrap<Syntax>(raw.detect(toXmlText(xml, 'detect')));
     },
     phases(syntax?: Syntax) {
       return unwrap<string[]>(raw.phases(syntax));
@@ -395,17 +446,17 @@ async function instantiate(base: string): Promise<Einvoice> {
     extract(pdf: PdfBytes) {
       return unwrap<HybridPayload>(raw.extract(pdf));
     },
-    embedPDF(pdf: PdfBytes, xml: string, e?: EmbedOptions, o?: Options) {
-      return unwrap<EmbedResult>(raw.embed(pdf, xml, e, o));
+    embedPDF(pdf: PdfBytes, xml: XmlSource, e?: EmbedOptions, o?: Options) {
+      return unwrap<EmbedResult>(raw.embed(pdf, toXmlText(xml, 'embedPDF'), e, o));
     },
-    parse(xml: string) {
-      return unwrap<ParseResult>(raw.parse(xml));
+    parse(xml: XmlSource) {
+      return unwrap<ParseResult>(raw.parse(toXmlText(xml, 'parse')));
     },
     render(model: InvoiceModel | string, o?: RenderOptions) {
       return unwrap<RenderResult>(raw.render(model, o));
     },
-    convert(xml: string, o?: RenderOptions) {
-      const read = unwrap<ParseResult>(raw.parse(xml));
+    convert(xml: XmlSource, o?: RenderOptions) {
+      const read = unwrap<ParseResult>(raw.parse(toXmlText(xml, 'convert')));
       const target: Syntax = o?.syntax ?? (read.syntax === 'CII' ? 'UBL' : 'CII');
       const made = unwrap<RenderResult>(raw.render(read.invoice, { ...o, syntax: target }));
       return { ...made, source: read.syntax, invoice: read.invoice, issues: read.issues };

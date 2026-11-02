@@ -163,7 +163,7 @@ test('a profile the XML contradicts is refused instead of written as a label', (
 
 test('embed needs both halves, and says which is missing', () => {
   assert.throws(() => einvoice.embedPDF(file('invoice-pdfa3.pdf')),
-    /expected the PDF bytes and the invoice XML/);
+    /takes XML as a string or bytes/);
   assert.throws(() => einvoice.embedPDF(file('invoice-pdfa3.pdf'), ''), /no XML to embed/);
   assert.throws(() => einvoice.embedPDF('a string, not bytes', sampleXML), EinvoiceError);
 });

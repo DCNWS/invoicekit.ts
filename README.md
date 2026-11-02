@@ -135,6 +135,15 @@ what is available, rather than quietly checking less. Every finding says which
 rule set wrote it in `source` — `en16931`, `xrechnung`, `peppol` — and
 `result.cius` / `result.profile` echo what ran.
 
+Every method that takes a document takes `string | Uint8Array | ArrayBuffer`, so
+a `Buffer` out of `fs.readFile(path)` and an `ArrayBuffer` out of
+`file.arrayBuffer()` go in as they are: no decoding step to forget, and no
+surprise when the file turns out to be UTF-16. A byte-order mark picks the
+decoder, and bytes that are not XML text are refused as bytes rather than handed
+to the parser. A wrong argument *type* is a `TypeError` naming the method and the
+argument; a wrong document is still an `EinvoiceError` from the engine. A mistake
+in the call and a broken invoice should not come back looking like each other.
+
 `inspect` returns two verdicts that do not move together, and keeps them apart on
 purpose. `ok` and `findings` describe the PDF envelope — PDF/A, XMP, the
 attachment and its metadata. `rules` is a `validate` result for the XML inside,

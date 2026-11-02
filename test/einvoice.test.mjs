@@ -115,7 +115,11 @@ test('non-invoice input raises EinvoiceError', () => {
     }, input);
   }
   assert.throws(() => einvoice.detect('hello'), EinvoiceError);
-  assert.throws(() => einvoice.validate(null), EinvoiceError);
+  // `null` is not a document of any kind, so it is a wrong argument rather than
+  // a bad one: the wrapper now answers with a TypeError naming the argument,
+  // where it used to pass it through and let the engine complain about a root
+  // element that was never there.
+  assert.throws(() => einvoice.validate(null), TypeError);
 });
 
 const xrSample = () =>
