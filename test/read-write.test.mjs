@@ -135,11 +135,15 @@ test('a tax registration keeps the register it was issued against', () => {
   assert.match(ubl.xml, /<cbc:CompanyID[^>]*schemeID="0189"/, 'the register label survives');
 
   // And the verdict stops moving somewhere the sender never put it: the same
-  // advisories the CII document already carried, and no new fatal finding.
+  // advisories the CII document already carried, and no new fatal finding. The
+  // one exception is honest: this fixture carries no specification identifier
+  // at all, which is why the source itself reports BR-DE-21, and converting
+  // into XRechnung declares the profile it was asked to write.
   const src = einvoice.validate(sample('cii-xrechnung.xml'), { cius: 'xrechnung' });
   assert.equal(ubl.rules.fatal, 0, 'the conversion introduced a fatal finding: ' + ubl.rules.findings.map((f) => f.id).join(', '));
-  assert.deepEqual(ubl.rules.findings.map((f) => f.id).sort(), src.findings.map((f) => f.id).sort(),
-    'a conversion may neither add a finding nor lose one');
+  const carried = src.findings.map((f) => f.id).filter((id) => id !== 'BR-DE-21').sort();
+  assert.deepEqual(ubl.rules.findings.map((f) => f.id).sort(), carried,
+    'a conversion may neither add a finding nor lose one, beyond the profile it declares');
   // The basis is readable on the other side, so this is a round trip and not a
   // one-way translation.
   assert.ok(einvoice.parse(ubl.xml).invoice.seller.taxIds.some((t) => t.scheme === 'FC'),
