@@ -122,19 +122,28 @@ test('a tax registration keeps the register it was issued against', () => {
   assert.match(cii.xml, /<ram:ID schemeID="FC">/);
   assert.match(cii.xml, /<ram:ID schemeID="0189">/);
 
-  // Converted to UBL, the fiscal number goes into the one element UBL gives a
-  // tax registration, labelled with its basis: UBL has no term for a non-VAT
-  // number. It used to be filed under the company register instead, which made
-  // the document look valid by losing the number. Now the rules that follow
-  // from the collision are reported and the number stays a tax number.
+  // Converted to UBL, the number keeps its register, and the register is stated
+  // by the TaxScheme element wrapped around it rather than by an attribute on
+  // the number: UBL gives a party two tax scheme elements (UBL-SR-42), reads the
+  // basis from the scheme — VAT is BT-31 and BT-48, TAX is BT-32, which CII
+  // labels FC. v0.2.10 labelled the number and left the scheme saying VAT, so a
+  // German Steuernummer crossed into UBL as a VAT number and BR-CO-09, BR-O-02
+  // and BR-O-04 fired on an invoice that had done nothing wrong at all.
   const ubl = einvoice.convert(sample('cii-xrechnung.xml'), { syntax: 'UBL', cius: 'xrechnung' });
-  assert.match(ubl.xml, /<cac:PartyTaxScheme>[\s\S]{0,200}?<cbc:CompanyID schemeID="FC"/);
+  assert.match(ubl.xml, /<cac:PartyTaxScheme>[\s\S]{0,200}?<cac:TaxScheme>[\s\S]{0,60}?<cbc:ID>TAX<\/cbc:ID>/);
+  assert.doesNotMatch(ubl.xml, /<cbc:CompanyID[^>]*schemeID="FC"/, 'the basis is not an attribute on the number');
   assert.match(ubl.xml, /<cbc:CompanyID[^>]*schemeID="0189"/, 'the register label survives');
-  assert.equal(ubl.rules.valid, false, 'the collision is reported, not hidden');
-  const ids = ubl.rules.findings.map((f) => f.id);
-  for (const rule of ['BR-CO-09', 'BR-O-02', 'BR-O-04']) {
-    assert.ok(ids.includes(rule), `expected ${rule} in ${ids.join(', ')}`);
-  }
+
+  // And the verdict stops moving somewhere the sender never put it: the same
+  // advisories the CII document already carried, and no new fatal finding.
+  const src = einvoice.validate(sample('cii-xrechnung.xml'), { cius: 'xrechnung' });
+  assert.equal(ubl.rules.fatal, 0, 'the conversion introduced a fatal finding: ' + ubl.rules.findings.map((f) => f.id).join(', '));
+  assert.deepEqual(ubl.rules.findings.map((f) => f.id).sort(), src.findings.map((f) => f.id).sort(),
+    'a conversion may neither add a finding nor lose one');
+  // The basis is readable on the other side, so this is a round trip and not a
+  // one-way translation.
+  assert.ok(einvoice.parse(ubl.xml).invoice.seller.taxIds.some((t) => t.scheme === 'FC'),
+    JSON.stringify(einvoice.parse(ubl.xml).invoice.seller.taxIds));
 });
 
 test('a charge keeps the base its percentage was taken on', () => {
