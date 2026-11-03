@@ -35,7 +35,9 @@ export interface Contact {
 /** A tax or registration identifier: BT-31, BT-32, BT-48. */
 export interface TaxID {
   value: string;
-  scheme?: string; // e.g. "VAT" for a VAT number
+  scheme?: string; // the register the number was issued against: "VAT" for a VAT number,
+  // "FC" for the German fiscal number a profile writes in its place; empty means the
+  // source document did not say
 }
 
 /** BG-17 payer account, BT-91 the account a mandate debits. */
@@ -104,7 +106,12 @@ export interface Reference {
 /** BG-20 allowance and BG-21 charge, at document or line level. */
 export interface AllowanceCharge {
   amount: number;
-  percent?: number;
+  percent?: number; // BT-94 / BT-101 / BT-139 / BT-144
+  // The amount the percentage was taken on: BT-93 / BT-100 / BT-137 / BT-142. A
+  // document states it, and a conversion has to carry it, since a percentage
+  // measured against a different base is different money. Left out, a writer
+  // measures it against the line net or the invoice total.
+  basis?: number;
   reason?: string; // BT-97 / BT-104
   reasonCode?: string; // BT-98 / BT-105, UNTDID 5189
   taxCategory?: string; // BT-95 / BT-102
@@ -196,6 +203,7 @@ export interface Party {
   contact?: Contact;
   taxIds?: TaxID[];
   regIds?: string[]; // BT-30 / BT-47 legal registration identifiers
+  regScheme?: string; // the register they come from, as an ICD code: 0189 is the German commercial register
   eaddress?: string; // BT-34 / BT-49 electronic address
   easScheme?: string; // the scheme of eaddress; 0188 is implied by an email address
   identifier?: string; // BT-29 seller, BT-46 buyer
