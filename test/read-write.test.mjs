@@ -107,3 +107,49 @@ test('a profile the model cannot satisfy fails at render, not in an inbox', () =
   assert.equal(made.rules.valid, false);
   assert.ok(made.rules.fatal > 0);
 });
+
+test('a tax registration keeps the register it was issued against', () => {
+  const doc = einvoice.parse(sample('cii-xrechnung.xml'));
+  const seller = doc.invoice.seller;
+  // This sample's seller has a German fiscal number and a commercial-register
+  // entry, and the document says which is which. The label is not the
+  // engine's to drop: a number is only meaningful next to its register.
+  assert.ok(seller.taxIds.some((t) => t.scheme === 'FC' && t.value), JSON.stringify(seller.taxIds));
+  assert.equal(seller.regScheme, '0189', JSON.stringify(seller.regIds));
+
+  // Written back as CII, both labels are where the document had them.
+  const cii = einvoice.render(doc.invoice, { syntax: 'CII' });
+  assert.match(cii.xml, /<ram:ID schemeID="FC">/);
+  assert.match(cii.xml, /<ram:ID schemeID="0189">/);
+
+  // Converted to UBL, the fiscal number goes into the one element UBL gives a
+  // tax registration, labelled with its basis: UBL has no term for a non-VAT
+  // number. It used to be filed under the company register instead, which made
+  // the document look valid by losing the number. Now the rules that follow
+  // from the collision are reported and the number stays a tax number.
+  const ubl = einvoice.convert(sample('cii-xrechnung.xml'), { syntax: 'UBL', cius: 'xrechnung' });
+  assert.match(ubl.xml, /<cac:PartyTaxScheme>[\s\S]{0,200}?<cbc:CompanyID schemeID="FC"/);
+  assert.match(ubl.xml, /<cbc:CompanyID[^>]*schemeID="0189"/, 'the register label survives');
+  assert.equal(ubl.rules.valid, false, 'the collision is reported, not hidden');
+  const ids = ubl.rules.findings.map((f) => f.id);
+  for (const rule of ['BR-CO-09', 'BR-O-02', 'BR-O-04']) {
+    assert.ok(ids.includes(rule), `expected ${rule} in ${ids.join(', ')}`);
+  }
+});
+
+test('a charge keeps the base its percentage was taken on', () => {
+  const model = einvoice.parse(sample('cii-xrechnung.xml')).invoice;
+  // The sample's line charge is 19% of its line total. Move the base somewhere
+  // else and the money has to move with it: a percentage on a different base is
+  // a different amount, and a conversion that re-derives the base invents it.
+  const line = model.lines[0];
+  line.charges = [{ ...line.charges[0], amount: 0, basis: 100 }];
+  for (const syntax of ['CII', 'UBL']) {
+    const made = einvoice.render(model, { syntax });
+    const back = einvoice.parse(made.xml).invoice;
+    const ac = back.lines[0].charges[0];
+    assert.equal(ac.percent, 19, `${syntax}: the percentage survives`);
+    assert.equal(ac.basis, 100, `${syntax}: ${JSON.stringify(ac)}`);
+    assert.equal(ac.amount, 19, `${syntax}: the amount follows the stated base`);
+  }
+});
