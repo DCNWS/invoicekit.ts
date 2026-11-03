@@ -108,11 +108,17 @@ jobs:
           # a reason of this workflow's own ordering, and would hide a real
           # failure behind a bookkeeping one.
           npm version --no-git-tag-version "$ver"
+          # The README's install line is a tarball URL naming this version, and a
+          # test in the suite below insists it matches package.json. npm version
+          # moves package.json only, so the link moves here: a release whose own
+          # README installs the previous build is a broken instruction with a
+          # green tick next to it.
+          sed -i "s|releases/download/v[0-9][0-9.]*/invoicekit-einvoice-[0-9][0-9.]*\.tgz|releases/download/v$ver/invoicekit-einvoice-$ver.tgz|g" README.md
           # Attribution follows whoever switched the automation on, not a bot
           # nobody can reach when a release goes wrong.
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-          git add package.json package-lock.json
+          git add package.json package-lock.json README.md
           git commit -qm "chore(release): take engine v$ver and bump the package to match"
           git tag "v$ver"
 
