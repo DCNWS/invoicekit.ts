@@ -26,6 +26,25 @@ test('the bundled engine reports the package version', () => {
   assert.equal(einvoice.version, pkg.version);
 });
 
+// The install line is the first thing a reader copies. The package is not on the
+// registry, so the tarball this version publishes is the only install that
+// resolves, and a link to another version is a link to another build's bytes.
+test('the README installs the release this version publishes', () => {
+  const pkg = JSON.parse(readFileSync(path.join(here, '..', 'package.json'), 'utf8'));
+  const readme = readFileSync(path.join(here, '..', 'README.md'), 'utf8');
+  const links = [...readme.matchAll(/releases\/download\/(v[^/]+)\/([^"'\s]+\.tgz)/g)];
+  assert.ok(links.length, 'the README offers no tarball install');
+  for (const m of links) {
+    assert.equal(m[1], `v${pkg.version}`, 'the README installs another release');
+    assert.equal(m[2], `invoicekit-einvoice-${pkg.version}.tgz`,
+      'the README links an asset this release does not publish');
+  }
+  if (readme.includes('npm install @invoicekit/einvoice')) {
+    assert.match(readme, /not\s+on the registry/i,
+      'the README offers a registry install that resolves nowhere');
+  }
+});
+
 test('UBL reference documents are valid', () => {
   const dir = path.join(ref, 'test', 'testfiles');
   const files = xmlIn(dir);
