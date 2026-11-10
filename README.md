@@ -36,7 +36,7 @@ What does work is the tarball attached to each
 same engine the tests just ran against, installed by URL.
 
 ```sh
-npm install https://github.com/DCNWS/invoicekit.ts/releases/download/v0.2.11/invoicekit-einvoice-0.2.11.tgz
+npm install https://github.com/DCNWS/invoicekit.ts/releases/download/v0.2.13/invoicekit-einvoice-0.2.13.tgz
 ```
 
 To work on the package itself, build the binaries from the Go sources first —
